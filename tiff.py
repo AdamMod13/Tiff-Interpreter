@@ -39,21 +39,36 @@ def getHistogramTo16Bits(img):
 
 
 def getColoursPaletteTo8Bits(img):
+    img = img.convert('P')
     palette = img.getpalette()
-    print(palette)
+    rgb_values = [(palette[i], palette[i + 1], palette[i + 2]) for i in range(0, len(palette), 3)]
+    
+    color_indices = list(range(len(rgb_values)))
+    color_palette = np.zeros((50, len(color_indices), 3), dtype=np.uint8)
+    
+    for i, rgb in enumerate(rgb_values):
+        color_palette[:, i, :] = rgb
+    
+    plt.imshow(color_palette)
+    plt.axis('off')
+    plt.show()
 
 
 def doFourierTransformation(img):
     f = np.fft.fft2(img)
     f_shift = np.fft.fftshift(f)
 
-    magnitude_spec = 20*np.log(np.absolute(f_shift))
+    magnitude_spec = 20*np.log(np.abs(f_shift))
+    phase_spec = np.angle(f_shift)
 
     magnitude_spec = cv2.normalize(
         magnitude_spec, None, 0, 255, cv2.NORM_MINMAX)
+    phase_spec = cv2.normalize(
+        phase_spec, None, 0, 255, cv2.NORM_MINMAX)
 
     cv2.imshow('Obraz oryginalny', img)
-    cv2.imshow("Image after TF", magnitude_spec.astype('uint8'))
+    cv2.imshow("Widmo amplitudowe", magnitude_spec.astype('uint8'))
+    cv2.imshow("Widmo fazowe", phase_spec.astype('uint8'))
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 
@@ -68,6 +83,18 @@ def maskTiffPersonalInfo(img):
 
     with Image.fromarray(np.array(img)) as im_output:
         im_output.save('anonimizowany_plik.tiff')
+
+    # tags_to_anonymize = [270, 271, 272, 305, 306, 315, 316]
+    # tags = img.tag_v2
+    # new_tags = {}
+
+    # for tag in tags.keys():
+    #     if tag in tags_to_anonymize:
+    #         new_tags[tag] = "hello"
+
+    # with Image.fromarray(np.array(img)) as im_output:
+    #     im_output.save('anonimizowany_plik.tiff', tiffinfo=new_tags)
+
 
 
 print("Program służy do analizy pliku w formacie tiff")
