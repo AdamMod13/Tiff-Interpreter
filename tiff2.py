@@ -1,74 +1,97 @@
-import io
-import imageio.v2 as imageio
-import struct
 import math
 import random
+import numpy as np
 import tifffile as tiff
 from PIL import Image
+from skimage import io
 
-# Funkcja szyfrująca RSA
-def encrypt_rsa(plaintext, public_key):
+encrypt_data_tiff_black_white = []
+
+def encrypt_rsa_black_white(plaintext, public_key):
     n, e = public_key
     ciphertext = [pow(byte, e, n) for byte in plaintext]
     return ciphertext
 
-# Funkcja deszyfrująca RSA
-def decrypt_rsa(ciphertext, private_key):
+def decrypt_rsa_black_white(ciphertext, private_key):
     n, d = private_key
-    decrypted_data = [pow(byte, d, n) for byte in ciphertext]
+    decrypted_data = []
+    for byte in ciphertext:
+        decrypted_byte = pow(byte, d, n)
+        decrypted_data.append(decrypted_byte)
     return decrypted_data
 
-# Funkcja szyfrująca zawartość pliku TIFF
+def encrypt_rsa_color(file_path, public_key):
+    n, e = public_key
+    image = Image.open(file_path).convert("RGB")
+    image_array = np.array(image)
+    height, width, _ = image_array.shape
+    global encrypted_image_color_array
+    encrypted_image_color_array = []
+
+    for y in range(height):
+        row = []
+        for x in range(width):
+            r, g, b = image_array[y, x]
+            temp = [int(r), int(g), int(b)]
+            ciphertext = [pow(byte, e, n) for byte in temp]
+            row.append((ciphertext[0], ciphertext[1], ciphertext[2]))
+            image_array[y, x] = ciphertext 
+        encrypted_image_color_array.append(row)
+
+    encrypted_image = Image.fromarray(image_array)
+    
+    encrypted_image.save("encrypted_image_color.tiff")
+
+    return ciphertext
+
+def decrypt_rsa_color(file_path, private_key):
+    n, d = private_key
+    decrypted_data = []
+    image = Image.open(file_path).convert("RGB")
+    image_array = np.array(image)
+    height, width, _ = image_array.shape
+
+    for y in range(height):
+        for x in range(width):
+            r, g, b = encrypted_image_color_array[y][x]
+            temp = [int(r), int(g), int(b)]
+            ciphertext = [pow(byte, d, n) for byte in temp]
+            image_array[y, x] = ciphertext 
+
+    decrypted_image = Image.fromarray(image_array)
+    
+    decrypted_image.save("decrypted_image_color.tiff")
+
+    return decrypted_data
+
 def encrypt_tiff(file_path, public_key):
-    with Image.open(file_path) as img:
-        data = list(img.tobytes())
+    data = io.imread(file_path).astype(np.uint16)
+    tiff.imwrite('black_white.tiff', np.array(data, dtype=np.uint8))
+    encrypted_data = encrypt_rsa_black_white(data.flatten().tolist(), public_key)
 
-    # Szyfrowanie masy bitowej pliku
-    encrypted_data = encrypt_rsa(data, public_key)
+    global encrypt_data_tiff_black_white 
+    encrypt_data_tiff_black_white = encrypted_data.copy()
 
-    # Normalizacja zaszyfrowanych danych do zakresu 0-255
-    normalized_data = [byte % 256 for byte in encrypted_data]
+    encrypted_array = np.array(encrypted_data, dtype=np.uint16).reshape(data.shape)
 
-    # Konwersja zaszyfrowanych danych na obiekt bajtowy
-    encrypted_bytes = bytes(normalized_data)
-
-    # Odczytanie obrazu TIFF z odszyfrowanych danych
-    img = Image.frombytes(img.mode, img.size, encrypted_bytes)
     encrypted_file_path = file_path.replace('.tiff', '_encrypted.tiff')
-    img.save(encrypted_file_path)
+    tiff.imwrite(encrypted_file_path, encrypted_array)
 
     print("Plik TIFF został zaszyfrowany i zapisany jako:", encrypted_file_path)
 
-# Funkcja deszyfrująca zawartość pliku TIFF
 def decrypt_tiff(file_path, private_key):
-    with open(file_path, 'rb') as file:
-        encrypted_data = file.read()
+    encrypted_data = tiff.imread(file_path).astype(np.uint16)
 
-    # Deszyfrowanie zaszyfrowanych danych
-    decrypted_data = decrypt_rsa(encrypted_data, private_key)
+    decrypted_data = decrypt_rsa_black_white(encrypt_data_tiff_black_white, private_key)
 
-    # Normalizacja odszyfrowanych danych do zakresu 0-255
-    normalized_data = [byte % 256 for byte in decrypted_data]
+    decrypted_array = np.array(decrypted_data, dtype=np.uint8).reshape(encrypted_data.shape)
 
-    # Konwersja odszyfrowanych danych na obiekt bajtowy
-    decrypted_bytes = bytes(normalized_data)
-
-    # Zapisanie odszyfrowanych danych jako plik TIFF
     decrypted_file_path = file_path.replace('_encrypted.tiff', '_decrypted.tiff')
-    with open(decrypted_file_path, 'wb') as decrypted_file:
-        decrypted_file.write(decrypted_bytes)
+    tiff.imwrite(decrypted_file_path, decrypted_array)
 
-    # Odczytanie zapisanego pliku TIFF za pomocą biblioteki PIL (Pillow)
-    img = Image.open(decrypted_file_path)
-    img.show()
-
-    print("Plik TIFF został odszyfrowany i wyświetlony jako obraz.")
-
-    return img
-
+    print("Plik TIFF został odszyfrowany i zapisany jako:", decrypted_file_path)
 
 def generate_rsa_keys():
-    # Funkcja generująca losową liczbę pierwszą
     def generate_prime_number():
         def is_prime(n):
             if n <= 1:
@@ -78,12 +101,11 @@ def generate_rsa_keys():
                     return False
             return True
 
-        while True:
-            prime_candidate = random.randint(2 ** 16, 2 ** 17)
-            if is_prime(prime_candidate):
-                return prime_candidate
-
-    # Wygenerowanie dwóch różnych liczb pierwszych
+        prime = random.randint(2**10, 2**12)
+        while not is_prime(prime):
+            prime = random.randint(2**10, 2**12)
+        return prime
+    
     p = generate_prime_number()
     q = generate_prime_number()
     while p == q:
@@ -91,6 +113,30 @@ def generate_rsa_keys():
 
     n = p * q
     phi = (p - 1) * (q - 1)
+
+    def odwr_mod(a, n):
+        a0, n0, p0, p1, q, r, t = 0, 0, 0, 1, 0, 0, 0
+        p0 = 0
+        p1 = 1
+        a0 = a
+        n0 = n
+        q = n0 // a0
+        r = n0 % a0
+
+        while r > 0:
+            t = p0 - q * p1
+            if t >= 0:
+                t = t % n
+            else:
+                t = n - ((-t) % n)
+            p0 = p1
+            p1 = t
+            n0 = a0
+            a0 = r
+            q = n0 // a0
+            r = n0 % a0
+
+        return p1
 
     # Obliczenie liczby d za pomocą rozszerzonego algorytmu Euklidesa
     def extended_euclidean(a, b):
@@ -102,18 +148,15 @@ def generate_rsa_keys():
     e = random.randint(2, phi - 1)
     while math.gcd(e, phi) != 1:
         e = random.randint(2, phi - 1)
-
-    _, _, d = extended_euclidean(e, phi)
-    d %= phi
-    if d < 0:
-        d += phi
+    d = odwr_mod(e, phi)
 
     public_key = (n, e)
     private_key = (n, d)
     return public_key, private_key
 
 
-# Przykładowe użycie funkcji
 public_key, private_key = generate_rsa_keys()
+encrypt_rsa_color("przyklad3.tiff", public_key)
+decrypt_rsa_color("encrypted_image_color.tiff", private_key)
 encrypt_tiff('przyklad3.tiff', public_key)
 decrypt_tiff('przyklad3_encrypted.tiff', private_key)
