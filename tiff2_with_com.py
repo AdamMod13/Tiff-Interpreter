@@ -4,6 +4,7 @@ import numpy as np
 import tifffile as tiff
 from PIL import Image
 from skimage import io
+import aspose.words as aw
 
 encrypt_data_tiff_black_white = []
 
@@ -20,7 +21,7 @@ def decrypt_rsa_black_white(ciphertext, private_key):
         decrypted_data.append(decrypted_byte)
     return decrypted_data
 
-def encrypt_rsa_color(file_path, public_key):
+def encrypt_rsa_color(file_path, public_key,file_name):
     n, e = public_key
     image = Image.open(file_path).convert("RGB")
     image_array = np.array(image)
@@ -40,7 +41,7 @@ def encrypt_rsa_color(file_path, public_key):
 
     encrypted_image = Image.fromarray(image_array)
     
-    encrypted_image.save("encrypted_image_color.tiff")
+    encrypted_image.save(file_name)
 
     return ciphertext
 
@@ -91,6 +92,29 @@ def decrypt_tiff(file_path, private_key):
 
     print("Plik TIFF został odszyfrowany i zapisany jako:", decrypted_file_path)
 
+
+def compression_LZW(file_path):
+
+    doc = aw.Document()
+    builder = aw.DocumentBuilder(doc)
+
+    shape = builder.insert_image(file_path)
+
+    #  Zaktualizuj ustawienia strony, aby przyciąć dokument tak, aby pasował do rozmiaru obrazu.
+    pageSetup = builder.page_setup
+    pageSetup.page_width = shape.width
+    pageSetup.page_height = shape.height
+    pageSetup.top_margin = 0
+    pageSetup.left_margin = 0
+    pageSetup.bottom_margin = 0
+    pageSetup.right_margin = 0
+
+    save_options = aw.saving.ImageSaveOptions(aw.SaveFormat.TIFF)
+    save_options.tiff_compression = aw.saving.TiffCompression.LZW
+
+    doc.save("przyklad_compression.tiff", save_options)
+
+
 def generate_rsa_keys():
     def generate_prime_number():
         def is_prime(n):
@@ -101,9 +125,9 @@ def generate_rsa_keys():
                     return False
             return True
 
-        prime = random.randint(2**10, 2**12)
+        prime = random.randint(2**15, 2**16)
         while not is_prime(prime):
-            prime = random.randint(2**10, 2**12)
+            prime = random.randint(2**15, 2**16)
         return prime
     
     p = generate_prime_number()
@@ -156,7 +180,9 @@ def generate_rsa_keys():
 
 
 public_key, private_key = generate_rsa_keys()
-encrypt_rsa_color("przyklad3.tiff", public_key)
+encrypt_rsa_color("przyklad3.tiff", public_key,"encrypted_image_color.tiff")
 decrypt_rsa_color("encrypted_image_color.tiff", private_key)
+compression_LZW("przyklad3.tiff")
+encrypt_rsa_color("przyklad_compression.tiff", public_key, "encrypted_image_color_compression.tiff")
 encrypt_tiff('przyklad3.tiff', public_key)
 decrypt_tiff('przyklad3_encrypted.tiff', private_key)
